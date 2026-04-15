@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
-const PARTIES = ['PROGRESSIVE PARTY', 'UNITY ALLIANCE', 'FUTURE FORWARD', 'EQUALITY FRONT', 'INDEPENDENCE GROUP'];
+const PARTIES = ['DMK', 'ADMK', 'TVK', 'NTK', 'OTHERS', 'NOTA'];
 
 export default function VotePage() {
   const router = useRouter();

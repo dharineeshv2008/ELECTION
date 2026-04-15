@@ -61,7 +61,7 @@ export default function AdminPage() {
       if (resError) throw resError;
 
       const counts: Record<string, number> = {};
-      const parties = ['PROGRESSIVE PARTY', 'UNITY ALLIANCE', 'FUTURE FORWARD', 'EQUALITY FRONT', 'INDEPENDENCE GROUP'];
+      const parties = ['DMK', 'ADMK', 'TVK', 'NTK', 'OTHERS', 'NOTA'];
       parties.forEach(p => counts[p] = 0);
       
       voteData.forEach(v => {
