@@ -40,11 +40,15 @@ export function LivePoll({ showTitle = true, compact = false }: LivePollProps) {
       const { data: voteData } = await supabase.from('votes').select('party');
       if (voteData) {
         const counts: Record<string, number> = {};
-        const parties = ['DMK', 'ADMK', 'TVK', 'NTK', 'OTHERS', 'NOTA'];
+        const parties = ['PROGRESSIVE PARTY', 'UNITY ALLIANCE', 'FUTURE FORWARD', 'EQUALITY FRONT', 'INDEPENDENCE GROUP'];
         parties.forEach(p => counts[p] = 0);
         
         voteData.forEach(v => {
-          if(counts[v.party] !== undefined) counts[v.party]++;
+          if (v.party && counts[v.party] !== undefined) {
+            counts[v.party]++;
+          } else if (v.party) {
+            counts[v.party] = (counts[v.party] || 0) + 1;
+          }
         });
 
         const formatted = Object.keys(counts).map(k => ({ party: k, count: counts[k] }));

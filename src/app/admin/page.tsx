@@ -61,11 +61,16 @@ export default function AdminPage() {
       if (resError) throw resError;
 
       const counts: Record<string, number> = {};
-      const parties = ['DMK', 'ADMK', 'TVK', 'NTK', 'OTHERS', 'NOTA'];
+      const parties = ['PROGRESSIVE PARTY', 'UNITY ALLIANCE', 'FUTURE FORWARD', 'EQUALITY FRONT', 'INDEPENDENCE GROUP'];
       parties.forEach(p => counts[p] = 0);
       
       voteData.forEach(v => {
-        if(counts[v.party] !== undefined) counts[v.party]++;
+        if (v.party && counts[v.party] !== undefined) {
+          counts[v.party]++;
+        } else if (v.party) {
+          // Dynamic handling if a party isn't in the list
+          counts[v.party] = (counts[v.party] || 0) + 1;
+        }
       });
 
       const formatted = Object.keys(counts).map(k => ({ party: k, count: counts[k] }));

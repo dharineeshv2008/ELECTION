@@ -1,17 +1,28 @@
-export const REG_NO_REGEX = /^9276(25|24|23)B[A-Z]{2}\d{3}$/;
-
-export function validateRegNo(regNo: string): boolean {
-  return REG_NO_REGEX.test(regNo);
+export function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 }
 
 export function getDeviceId(): string {
   if (typeof window === 'undefined') return '';
-  let deviceId = localStorage.getItem('voting_device_id');
-  if (!deviceId) {
-    deviceId = crypto.randomUUID();
-    localStorage.setItem('voting_device_id', deviceId);
+  
+  // Advanced fingerprinting based on browser characteristics
+  const fingerprint = [
+    navigator.userAgent,
+    window.screen.width,
+    window.screen.height,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.language
+  ].join('|');
+
+  // Using btoa for a base64 encoded fingerprint as requested
+  // This produces a consistent string for the same browser environment
+  try {
+    return btoa(unescape(encodeURIComponent(fingerprint)));
+  } catch (e) {
+    // Fallback if btoa fails
+    return fingerprint.replace(/[^a-zA-Z0-9]/g, '');
   }
-  return deviceId;
 }
 
 export function hasVotedLocally(): boolean {

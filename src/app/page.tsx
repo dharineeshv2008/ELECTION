@@ -4,33 +4,34 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { ErrorMessage } from '@/components/ErrorMessage';
-import { validateRegNo, getDeviceId, hasVotedLocally } from '@/lib/validation';
+import { AdminLoginModal } from '@/components/AdminLoginModal';
+import { validateEmail, getDeviceId, hasVotedLocally } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Info, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ShieldCheck, Mail, ChevronRight, Lock } from 'lucide-react';
+import { cn, maskEmail } from '@/lib/utils';
 
 export default function Home() {
   const router = useRouter();
-  const [regNo, setRegNo] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [shake, setShake] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
-  // Hidden admin trigger
+  // Hidden admin trigger via 5 taps
   const handleBottomTap = () => {
     setTapCount(prev => {
       const newCount = prev + 1;
       if (newCount === 5) {
-        router.push('/admin');
+        setIsAdminModalOpen(true);
         return 0;
       }
       return newCount;
     });
-    // Reset tap count after delay
     setTimeout(() => setTapCount(0), 3000);
   };
 
@@ -44,10 +45,10 @@ export default function Home() {
 
   // Auto clear error when valid format is entered
   useEffect(() => {
-    if (error && validateRegNo(regNo.toUpperCase().trim()) && !hasVoted) {
+    if (error && validateEmail(email.toLowerCase().trim()) && !hasVoted) {
       setError('');
     }
-  }, [regNo, error, hasVoted]);
+  }, [email, error, hasVoted]);
 
   const triggerShake = () => {
     setShake(true);
@@ -59,70 +60,68 @@ export default function Home() {
     if (hasVoted) return;
     
     setError('');
+    const formattedEmail = email.toLowerCase().trim();
     
-    const formattedRegNo = regNo.toUpperCase().trim();
-    if (!validateRegNo(formattedRegNo)) {
-      setError('Invalid Register Number format. Example: 927625BEC000');
+    if (!validateEmail(formattedEmail)) {
+      setError('Please enter a valid email address. Example: voter@school.com');
       triggerShake();
       return;
     }
 
     setIsLoading(true);
     try {
-      // 1. Check if user already exists
-      const { data: user } = await supabase
+      // 1. Check if email already voted
+      const { data: userByEmail } = await supabase
         .from('users')
         .select('*')
-        .eq('reg_no', formattedRegNo)
+        .eq('email', formattedEmail)
         .single();
 
-      if (user) {
-        if (user.has_voted) {
-          setError('This registration number has already been used to vote.');
-          triggerShake();
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // 2. Check if device_id already voted (server-side)
-      const deviceId = getDeviceId();
-      const { data: deviceUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('device_id', deviceId)
-        .single();
-
-      if (deviceUser && deviceUser.has_voted) {
-        setError('This device has already recorded a vote.');
+      if (userByEmail && userByEmail.has_voted) {
+        setError(`The email ${maskEmail(formattedEmail)} has already cast a vote.`);
         triggerShake();
         setIsLoading(false);
         return;
       }
 
-      // 3. User is valid, store locally and proceed
-      sessionStorage.setItem('temp_reg_no', formattedRegNo);
+      // 2. Strong device detection: Check if device_id already voted
+      const deviceId = getDeviceId();
+      const { data: userByDevice } = await supabase
+        .from('users')
+        .select('*')
+        .eq('device_id', deviceId)
+        .eq('has_voted', true)
+        .single();
+
+      if (userByDevice) {
+        setError('This device has already recorded a vote. Multiple accounts from one device are blocked to ensure fairness.');
+        triggerShake();
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Identification successful, proceed to vote room
+      sessionStorage.setItem('temp_email', formattedEmail);
       router.push('/vote');
     } catch (err) {
       console.error(err);
-      setError('Database connection error. Please try again.');
+      setError('Connection error. Please check your internet and try again.');
       triggerShake();
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Guard hydration-sensitive props
   const isInputDisabled = isLoading || (mounted && hasVoted);
-  const isButtonDisabled = isLoading || !regNo || (mounted && hasVoted);
+  const isButtonDisabled = isLoading || !email || (mounted && hasVoted);
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-transparent to-blue-50/50 dark:to-blue-950/20">
       <Navbar />
       
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         className="max-w-md w-full glass p-8 shadow-2xl relative overflow-hidden"
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
@@ -131,9 +130,9 @@ export default function Home() {
           <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4 border border-blue-200 dark:border-blue-800">
             <ShieldCheck className="text-blue-600 dark:text-blue-400" size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-center">Student Authentication</h1>
+          <h1 className="text-2xl font-bold text-center">Identity Verification</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-2">
-            Enter your college register number to verify eligibility.
+            Enter your email to verify eligibility and securely record your vote.
           </p>
         </div>
 
@@ -144,22 +143,20 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2">
-                Register Number
-                <Info size={14} className="text-blue-500" />
+                Email Address
+                <Mail size={14} className="text-blue-500" />
               </label>
               <input
-                type="text"
-                placeholder="e.g. 927625BEC000"
+                type="email"
+                placeholder="e.g. johndoe@school.edu"
                 className={cn(
-                  "input-field text-lg uppercase font-mono tracking-wider",
+                  "input-field text-lg",
                   error ? "border-red-500 focus:border-red-500" : ""
                 )}
-                value={regNo}
-                onChange={(e) => {
-                  setRegNo(e.target.value);
-                  if (error && !hasVoted) setError('');
-                }}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isInputDisabled}
+                autoComplete="email"
               />
             </div>
 
@@ -168,13 +165,13 @@ export default function Home() {
             <button
               type="submit"
               disabled={isButtonDisabled}
-              className="btn-primary w-full flex items-center justify-center gap-2 mt-4"
+              className="btn-primary w-full flex items-center justify-center gap-2 mt-4 py-4 text-base font-bold shadow-lg"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  Verify Identity
+                  Authenticate Identity
                   <ChevronRight size={18} />
                 </>
               )}
@@ -183,20 +180,37 @@ export default function Home() {
         </motion.div>
 
         <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-center space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
-            Security Notice
-          </p>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            One device per vote. Your device ID is logged for transparency. 
-            All attempts to double-vote are automatically blocked.
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Lock size={12} className="text-gray-400" />
+            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-bold">
+              Secure Environment
+            </p>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+            Standard anti-fraud protocols active. Your advanced device fingerprint is being monitored to prevent duplicate submissions. 
           </p>
         </div>
       </motion.div>
 
-      {/* Hidden admin trigger area */}
+      {/* Subtle Admin Trigger Button */}
+      <div className="mt-8 flex items-center gap-4 opacity-30 hover:opacity-100 transition-opacity">
+        <button 
+          onClick={() => setIsAdminModalOpen(true)}
+          className="text-[10px] uppercase tracking-widest text-gray-400 font-bold hover:text-blue-500"
+        >
+          Admin Access
+        </button>
+      </div>
+
+      <AdminLoginModal 
+        isOpen={isAdminModalOpen} 
+        onClose={() => setIsAdminModalOpen(false)} 
+      />
+
+      {/* Hidden 5-tap trigger area overlay */}
       <div 
         onClick={handleBottomTap}
-        className="fixed bottom-0 left-0 w-full h-12 cursor-default z-50 select-none"
+        className="fixed bottom-0 left-0 w-full h-16 cursor-default z-[90] select-none opacity-0"
         aria-hidden="true"
       />
     </main>
